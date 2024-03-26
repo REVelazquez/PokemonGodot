@@ -1,15 +1,21 @@
 extends CharacterBody2D
 
-signal player_moving_signal
-signal player_stopped_signal
-
+signal entering_door
+signal player_entered_door
 
 @export var walk_speed = 4.0
+@export var jump_speed = 4.0
 const TILE_SIZE= 16
 
 @onready var anim_tree = $AnimationTree
 @onready var anim_state= anim_tree.get('parameters/playback')
-@onready var ray = $RayCast2D
+@onready var ray = $BlockingRayCast2D
+@onready var ledge_ray = $JumpingRayCast2D2
+@onready var shadow = $Shadow
+@onready var landing_effect = $LandingDustEffect
+@onready var door_ray = $DoorRayCast2D
+@onready var sprite_2d = $Sprite2D
+
 
 enum PlayerState {IDLE, TURNING, WALKING}
 enum FacingDirection {LEFT, RIGHT, UP, DOWN}
@@ -20,14 +26,20 @@ var facing_direction = FacingDirection.DOWN
 var initial_position = Vector2(0, 0)
 var input_direction = Vector2(0, 0)
 var is_moving = false
+var player_in_grass = false
 var percent_moved_to_next_tile = 0.0
 
+var jumping_over_ledge: bool =false
+var stop_input: bool = false
+
 func _ready():
+	sprite_2d.visible = true
 	anim_tree.active = true
 	initial_position = position
+	shadow.visible = false
 	
 func _physics_process(delta):
-	if player_state == PlayerState.TURNING:
+	if player_state == PlayerState.TURNING or stop_input:
 		return
 	elif is_moving == false:
 		process_player_movement_input()
@@ -76,25 +88,62 @@ func need_to_turn():
 	
 func finished_turning():
 	player_state = PlayerState.IDLE
+	
+func entered_door():
+	emit_signal('player_entered_door')
 		
 func move(delta):
 	var desired_step: Vector2 = input_direction * TILE_SIZE / 2
 	ray.target_position = desired_step
 	ray.force_raycast_update()
-	if !ray.is_colliding():
-		if percent_moved_to_next_tile == 0:
-			emit_signal('player_moving_signal')
+	
+	ledge_ray.target_position = desired_step
+	ledge_ray.force_raycast_update()
+	
+	door_ray.target_position = desired_step
+	door_ray.force_raycast_update()
+	
+	if door_ray.is_colliding():
+		if percent_moved_to_next_tile == 0.0:
+			emit_signal('entering_door')
+			stop_input = true
+			sprite_2d.visible = false
+		else:
+			stop_input = false
+			sprite_2d.visible = true
+			
+		percent_moved_to_next_tile += walk_speed * delta
+		if percent_moved_to_next_tile ==  1.0:
+			position = initial_position+(input_direction * TILE_SIZE)
+			percent_moved_to_next_tile = 0.0
+			is_moving = false
+			#player dissapear
+		else:
+			position = initial_position + (TILE_SIZE * input_direction * percent_moved_to_next_tile)
+	elif ledge_ray.is_colliding() && input_direction == Vector2(0, 1) or jumping_over_ledge:
+		percent_moved_to_next_tile += jump_speed * delta
+		if percent_moved_to_next_tile >= 2.0:
+			position = initial_position+(input_direction * TILE_SIZE * 2)
+			percent_moved_to_next_tile = 0
+			is_moving = false
+			jumping_over_ledge = false
+			shadow.visible = false
+			landing_effect.visible= true
+			landing_effect.play('default')
+		else:
+			shadow.visible = true
+			jumping_over_ledge = true
+			var input = input_direction.y * TILE_SIZE * percent_moved_to_next_tile
+			position.y = initial_position.y + (-.96 - 0.53 * input + 0.05 * pow(input, 2))
+	
+	elif !ray.is_colliding():
 		percent_moved_to_next_tile += walk_speed * delta
 		if percent_moved_to_next_tile >= 1.0:
 			position = initial_position + (TILE_SIZE * input_direction)
 			percent_moved_to_next_tile = 0.0
 			is_moving = false
-			emit_signal('player_stopped_signal')
 		else:
 			position = initial_position + (TILE_SIZE * input_direction * percent_moved_to_next_tile)
 	else:
 		is_moving = false
-
-
-
 
