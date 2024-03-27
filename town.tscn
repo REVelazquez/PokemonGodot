@@ -2328,3 +2328,8 @@ position = Vector2(416, 416)
 
 [node name="Tree288" parent="Ysort/Trees" instance=ExtResource("4_pxlml")]
 position = Vector2(384, 416)
+
+[connection signal="entering_door" from="Ysort/Player" to="Ysort/House/Door" method="_on_player_entering_door"]
+[connection signal="player_entered_door" from="Ysort/Player" to="Ysort/House/Door" method="_on_player_player_entered_door"]
+
+[editable path="Ysort/House"]
